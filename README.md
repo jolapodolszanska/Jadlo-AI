@@ -5,6 +5,8 @@ aby automatycznie tworzyć zdrowe, zbilansowane jadłospisy oraz listy zakupów.
 
 **Aplikacja jest w trakcie rozbudowy**
 
+<img src="https://github.com/jolapodolszanska/Jadlo-AI/blob/main/screen-apki.png"></img>
+
 ## Najważniejsze funkcje
 
 - Wgrywanie obrazu metodą „kliknij lub przeciągnij i upuść” (JPG/PNG/WEBP, limit 10 MB) i podgląd zdjęcia. 
