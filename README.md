@@ -1,6 +1,6 @@
 # JadłoAI - Rozpoznawanie jedzenia ze zdjęcia
 
-nteligentna aplikacja do planowania posiłków, generowania przepisów i bilansowania diety z pomocą modeli AI. „Jadło AI” łączy preferencje użytkownika, cele żywieniowe i zawartość lodówki, 
+Inteligentna aplikacja do planowania posiłków, generowania przepisów i bilansowania diety z pomocą modeli AI. „Jadło AI” łączy preferencje użytkownika, cele żywieniowe i zawartość lodówki, 
 aby automatycznie tworzyć zdrowe, zbilansowane jadłospisy oraz listy zakupów.
 
 **Aplikacja jest w trakcie rozbudowy**
