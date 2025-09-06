@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <title>JadłoAI – rozpoznawanie jedzenia 🍽️🤖📊</title>
+  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: linear-gradient(135deg, #e0c3fc, #8ec5fc);
+      display: flex;
+      justify-content: center;
+      padding: 20px;
+      margin: 0;
+    }
+    .container {
+      background: white;
+      border-radius: 16px;
+      padding: 25px;
+      max-width: 750px;
+      width: 100%;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+      text-align: center;
+    }
+    h1 {
+      color: #6a1b9a;
+      font-size: 26px;
+    }
+    .upload-area {
+      border: 2px dashed #9c27b0;
+      border-radius: 12px;
+      padding: 25px;
+      cursor: pointer;
+      margin: 20px 0;
+      color: #6a1b9a;
+      font-weight: bold;
+      transition: all 0.3s ease;
+    }
+    .upload-area:hover {
+      background: #f8f3ff;
+    }
+    .upload-area.dragover {
+      background: #f3e5f5;
+      border-color: #7b1fa2;
+    }
+    #preview {
+      max-width: 100%;
+      max-height: 300px;
+      margin: 15px 0;
+      border-radius: 10px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    .results {
+      margin-top: 20px;
+      text-align: left;
+    }
+    .food-item {
+      background: #f8f9fa;
+      border-radius: 12px;
+      padding: 15px;
+      margin: 10px 0;
+      border-left: 4px solid #9c27b0;
+    }
+    .food-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .food-name {
+      font-size: 18px;
+      font-weight: bold;
+      color: #6a1b9a;
+    }
+    .confidence {
+      background: #9c27b0;
+      color: white;
+      padding: 4px 8px;
+      border-radius: 15px;
+      font-size: 12px;
+      font-weight: bold;
+    }
+    .nutrition-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 15px;
+      margin-top: 15px;
+    }
+    .nutrition-card {
+      background: white;
+      padding: 12px;
+      border-radius: 8px;
+      text-align: center;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    .nutrition-value {
+      font-size: 20px;
+      font-weight: bold;
+      color: #2c3e50;
+      display: block;
+    }
+    .nutrition-label {
+      font-size: 11px;
+      color: #7f8c8d;
+      text-transform: uppercase;
+      margin-top: 2px;
+    }
+    .macros {
+      display: flex;
+      gap: 10px;
+      margin: 15px 0;
+    }
+    .macro {
+      flex: 1;
+      background: linear-gradient(45deg, #667eea, #764ba2);
+      color: white;
+      padding: 10px;
+      border-radius: 8px;
+      text-align: center;
+    }
+    .macro-protein { background: linear-gradient(45deg, #ff6b6b, #ee5a24); }
+    .macro-carbs { background: linear-gradient(45deg, #4ecdc4, #44a08d); }
+    .macro-fat { background: linear-gradient(45deg, #ffa726, #ff7043); }
+    .allergens {
+      margin-top: 10px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+    .allergen {
+      background: #ffeb3b;
+      color: #333;
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: bold;
+    }
+    .allergen.high-risk {
+      background: #f44336;
+      color: white;
+    }
+    .glycemic {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 15px;
+      font-size: 12px;
+      font-weight: bold;
+      margin-top: 5px;
+    }
+    .glycemic.low { background: #4caf50; color: white; }
+    .glycemic.medium { background: #ff9800; color: white; }
+    .glycemic.high { background: #f44336; color: white; }
+    .health-score {
+      display: inline-block;
+      padding: 8px 15px;
+      border-radius: 20px;
+      font-weight: bold;
+      font-size: 14px;
+      margin: 10px 0;
+    }
+    .health-score.excellent { background: #4caf50; color: white; }
+    .health-score.good { background: #8bc34a; color: white; }
+    .health-score.fair { background: #ffeb3b; color: #333; }
+    .health-score.poor { background: #ff9800; color: white; }
+    .health-score.bad { background: #f44336; color: white; }
+    .diet-compatibility {
+      background: #e3f2fd;
+      border-left: 4px solid #2196f3;
+      padding: 12px;
+      margin: 15px 0;
+      border-radius: 8px;
+    }
+    .diet-compatible { border-left-color: #4caf50; background: #e8f5e8; }
+    .diet-incompatible { border-left-color: #f44336; background: #ffebee; }
+    .alternatives {
+      background: #f0f4c3;
+      border-left: 4px solid #9ccc65;
+      padding: 15px;
+      margin: 15px 0;
+      border-radius: 8px;
+    }
+    .alternatives h4 {
+      margin: 0 0 10px 0;
+      color: #558b2f;
+    }
+    .alternative-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .alternative-item {
+      background: #9ccc65;
+      color: white;
+      padding: 6px 12px;
+      border-radius: 15px;
+      font-size: 13px;
+      font-weight: bold;
+    }
+    .progress {
+      background: #eee;
+      border-radius: 6px;
+      overflow: hidden;
+      margin: 5px 0;
+      height: 6px;
+    }
+    .progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, #9c27b0, #673ab7);
+      transition: width 0.8s ease;
+    }
+    .tips {
+      margin-top: 25px;
+      background: #0097a7;
+      color: white;
+      padding: 15px;
+      border-radius: 10px;
+      text-align: left;
+    }
+    .tips h3 {
+      margin: 0 0 10px 0;
+    }
+    .loading {
+      display: none;
+      color: #9c27b0;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div style="display: flex; align-items: center; justify-content: center; gap: 15px;">
+      <div style="width: 60px; height: 60px; background: linear-gradient(45deg, #9c27b0, #673ab7); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 30px;">🍽️</div>
+      <h1 style="margin: 0; color: #6a1b9a;">JadłoAI - Rozpoznawanie jedzenia ze zdjęcia</h1>
+    </div>
+    <p>Wgraj zdjęcie jedzenia, a AI rozpozna potrawę i poda szczegółowe informacje żywieniowe.</p>
+
+    <div class="upload-area" id="upload-area">
+      📷 Kliknij lub przeciągnij obraz tutaj 🍴
+      <br><small>Obsługiwane formaty: JPG, PNG, WEBP (max 10MB)</small>
+      <input type="file" id="upload" accept="image/*" style="display:none">
+    </div>
+
+    <!-- Selektor diety -->
+    <div style="margin: 20px 0; text-align: left;">
+      <label for="diet-select" style="font-weight: bold; color: #6a1b9a; margin-right: 10px;">🥗 Twoja dieta:</label>
+      <select id="diet-select" style="padding: 8px 12px; border: 2px solid #9c27b0; border-radius: 8px; background: white; color: #6a1b9a; font-weight: bold;">
+        <option value="standard">🍽️ Standard - Zbilansowana dieta</option>
+        <option value="keto">🥑 Keto - Nisko-węglowodanowa</option>
+        <option value="vegan">🌱 Wegańska - Bez produktów zwierzęcych</option>
+        <option value="lowcarb">🥩 Low-Carb - Ograniczone węglowodany</option>
+        <option value="mediterranean">🫒 Śródziemnomorska - Bogate w oliwę i ryby</option>
+      </select>
+    </div>
+
+    <div class="loading" id="loading">⏳ Analizuję zdjęcie...</div>
+    <img id="preview" src="" alt="Podgląd obrazu" style="display:none">
+    <div class="results" id="results"></div>
+
+    <div class="tips">
+      <h3>💡 Wskazówki dla lepszych wyników:</h3>
+      <ul>
+        <li>Używaj dobrze oświetlonych zdjęć</li>
+        <li>Potrawa powinna zajmować większą część kadru</li>
+        <li>Unikaj zbyt rozmytych lub ciemnych zdjęć</li>
+        <li>Najlepiej działają zdjęcia z jedną główną potrawą</li>
+      </ul>
+    </div>
+  </div>
+
+  <script>
+    const MODEL_PATH = "food101.onnx";
+    const LABELS_PATH = "labels.txt";
+    const NUTRITION_DATA_PATH = "nutrition.json";
+
+    let session, labels, nutritionData;
+    let selectedDiet = 'standard'; // domyślna dieta
+
+    // Definicje diet
+    const dietProfiles = {
+      'standard': { name: 'Standard', desc: 'Zbilansowana dieta' },
+      'keto': { name: 'Keto', desc: 'Nisko-węglowodanowa, wysoko-tłuszczowa' },
+      'vegan': { name: 'Wegańska', desc: 'Bez produktów pochodzenia zwierzęcego' },
+      'lowcarb': { name: 'Low-Carb', desc: 'Ograniczone węglowodany' },
+      'mediterranean': { name: 'Śródziemnomorska', desc: 'Bogate w oliwę i ryby' }
+    };
+
+    async function loadModel() {
+      try {
+        // Ładowanie modelu ONNX
+        session = await ort.InferenceSession.create(MODEL_PATH);
+        
+        // Ładowanie etykiet
+        const resLabels = await fetch(LABELS_PATH);
+        labels = (await resLabels.text()).trim().split("\n");
+        
+        // Ładowanie danych żywieniowych z zewnętrznego pliku JSON
+        const resNutrition = await fetch(NUTRITION_DATA_PATH);
+        nutritionData = await resNutrition.json();
+        
+        console.log("✅ Model, etykiety i dane żywieniowe załadowane:", labels.length, "klas");
+        console.log("✅ Załadowano dane żywieniowe dla", Object.keys(nutritionData).length, "potraw");
+      } catch (error) {
+        console.error("❌ Błąd ładowania modelu lub danych:", error);
+        document.getElementById("results").innerHTML = '<div style="color: red;">❌ Nie udało się załadować modelu AI lub danych żywieniowych</div>';
+      }
+    }
+
+    function preprocessImage(img) {
+      const canvas = document.createElement("canvas");
+      const size = 224;
+      canvas.width = size; canvas.height = size;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, size, size);
+      const data = ctx.getImageData(0, 0, size, size).data;
+
+      const float32Data = new Float32Array(3 * size * size);
+      let i = 0;
+      for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++, i++) {
+          float32Data[0 * size * size + i] = (data[i*4] / 255 - 0.485) / 0.229;
+          float32Data[1 * size * size + i] = (data[i*4+1] / 255 - 0.456) / 0.224;
+          float32Data[2 * size * size + i] = (data[i*4+2] / 255 - 0.406) / 0.225;
+        }
+      }
+      return new ort.Tensor("float32", float32Data, [1,3,size,size]);
+    }
+
+    function getGlycemicClass(gi) {
+      if (gi < 55) return { class: 'low', text: 'Niski IG' };
+      if (gi < 70) return { class: 'medium', text: 'Średni IG' };
+      return { class: 'high', text: 'Wysoki IG' };
+    }
+
+    function findNutritionData(label) {
+      // Szukanie danych żywieniowych - najpierw dokładne dopasowanie
+      if (nutritionData[label]) {
+        return nutritionData[label];
+      }
+      
+      // Próba dopasowania przez podobieństwo nazw
+      const labelLower = label.toLowerCase();
+      for (const [key, value] of Object.entries(nutritionData)) {
+        if (key.toLowerCase().includes(labelLower) || labelLower.includes(key.toLowerCase())) {
+          return value;
+        }
+      }
+      
+      return null;
+    }
+
+    // System oceny zdrowotnej (1-10)
+    function calculateHealthScore(nutrition) {
+      if (!nutrition) return { score: 5, category: 'fair', explanation: 'Brak danych żywieniowych' };
+      
+      let score = 5; // baseline
+      let factors = [];
+
+      // Pozytywne czynniki
+      if (nutrition.protein >= 15) { score += 1; factors.push('+ Wysokie białko'); }
+      if (nutrition.fiber >= 3) { score += 1; factors.push('+ Dużo błonnika'); }
+      if (nutrition.vitaminC >= 5) { score += 0.5; factors.push('+ Witamina C'); }
+      if (nutrition.calcium >= 100) { score += 0.5; factors.push('+ Dobre źródło wapnia'); }
+      if (nutrition.iron >= 2) { score += 0.5; factors.push('+ Żelazo'); }
+
+      // Negatywne czynniki
+      if (nutrition.sugar >= 15) { score -= 1; factors.push('- Wysoka zawartość cukru'); }
+      if (nutrition.sodium >= 800) { score -= 1; factors.push('- Dużo sodu'); }
+      if (nutrition.saturatedFat >= 8) { score -= 1; factors.push('- Nasycone tłuszcze'); }
+      if (nutrition.calories >= 400) { score -= 0.5; factors.push('- Wysokokaloryczne'); }
+      if (nutrition.glycemicIndex >= 85) { score -= 1; factors.push('- Wysoki indeks glikemiczny'); }
+
+      // Kategorie dań
+      const category = nutrition.category || '';
+      if (category === 'vegetables' || category === 'salad') score += 1;
+      if (category === 'fast_food' || category === 'dessert') score -= 1;
+
+      score = Math.max(1, Math.min(10, Math.round(score * 10) / 10));
+
+      let category_name, explanation;
+      if (score >= 8.5) { category_name = 'excellent'; explanation = 'Znakomity wybór żywieniowy!'; }
+      else if (score >= 7) { category_name = 'good'; explanation = 'Dobry wybór żywieniowy'; }
+      else if (score >= 5.5) { category_name = 'fair'; explanation = 'Przeciętny wybór żywieniowy'; }
+      else if (score >= 3.5) { category_name = 'poor'; explanation = 'Słaby wybór żywieniowy'; }
+      else { category_name = 'bad'; explanation = 'Unikaj tego typu jedzenia'; }
+
+      return { score, category: category_name, explanation, factors };
+    }
+
+    // Sprawdzanie zgodności z dietą
+    function checkDietCompatibility(nutrition, foodName) {
+      if (!nutrition) return { compatible: true, message: 'Brak danych do oceny', icon: '❓' };
+      
+      const allergens = nutrition.allergens || [];
+      const category = nutrition.category || '';
+      
+      switch (selectedDiet) {
+        case 'vegan':
+          const nonVeganAllergens = ['mleko', 'jaja', 'ryba', 'owoce_morza'];
+          const nonVeganCategories = ['meat', 'seafood'];
+          const hasAnimal = allergens.some(a => nonVeganAllergens.includes(a)) || 
+                           nonVeganCategories.includes(category);
+          return {
+            compatible: !hasAnimal,
+            message: hasAnimal ? 'Zawiera produkty pochodzenia zwierzęcego' : 'Zgodne z dietą wegańską',
+            icon: hasAnimal ? '🚫' : '✅'
+          };
+          
+        case 'keto':
+          const highCarbs = nutrition.carbs > 10;
+          return {
+            compatible: !highCarbs,
+            message: highCarbs ? `Zbyt dużo węglowodanów (${nutrition.carbs}g)` : 'Zgodne z dietą keto',
+            icon: highCarbs ? '⚠️' : '✅'
+          };
+          
+        case 'lowcarb':
+          const mediumCarbs = nutrition.carbs > 20;
+          return {
+            compatible: !mediumCarbs,
+            message: mediumCarbs ? `Dużo węglowodanów (${nutrition.carbs}g)` : 'Zgodne z dietą low-carb',
+            icon: mediumCarbs ? '⚠️' : '✅'
+          };
+          
+        case 'mediterranean':
+          const goodFats = nutrition.fat >= 8 && nutrition.saturatedFat < 5;
+          const seafoodBonus = category === 'seafood' || allergens.includes('ryba');
+          return {
+            compatible: goodFats || seafoodBonus,
+            message: seafoodBonus ? 'Świetne dla diety śródziemnomorskiej!' : 
+                    goodFats ? 'Dobre tłuszcze - zgodne z dietą' : 'Może nie idealnie pasuje',
+            icon: seafoodBonus ? '🐟' : goodFats ? '✅' : '⚠️'
+          };
+          
+        default:
+          return { compatible: true, message: 'Zbilansowana dieta - wszystko w umiarze', icon: '✅' };
+      }
+    }
+
+    // Sugestie alternatyw
+    function getAlternatives(foodName, nutrition) {
+      if (!nutrition) return [];
+      
+      const category = nutrition.category || '';
+      const alternatives = [];
+
+      // Alternatywy bazowane na kategorii
+      const alternativeMap = {
+        'fast_food': ['sałatka', 'wrap z kurczakiem', 'quinoa bowl', 'poke bowl'],
+        'dessert': ['jogurt grecki z owocami', 'chia pudding', 'smoothie', 'owoce'],
+        'pasta': ['shirataki', 'spaghetti z cukinii', 'quinoa', 'bulgur'],
+        'main_dish': ['grillowana ryba', 'sałatka z kurczakiem', 'tofu stir-fry', 'lentil curry'],
+        'soup': ['bone broth', 'miso soup', 'vegetable broth', 'gazpacho']
+      };
+
+      if (alternativeMap[category]) {
+        alternatives.push(...alternativeMap[category]);
+      }
+
+      // Alternatywy bazowane na składnikach odżywczych
+      if (nutrition.calories > 350) alternatives.push('porcja owoców', 'sałatka mieszana');
+      if (nutrition.carbs > 50) alternatives.push('sałatka z awokado', 'omlet warzywny');
+      if (nutrition.sodium > 800) alternatives.push('potrawa domowej roboty', 'świeże warzywa');
+      if (nutrition.sugar > 15) alternatives.push('orzechy', 'ser cottage', 'hummus');
+
+      // Alternatywy bazowane na diecie
+      if (selectedDiet === 'keto' && nutrition.carbs > 10) {
+        alternatives.push('awokado', 'jajka', 'orzechy', 'ser', 'mięso', 'ryba');
+      } else if (selectedDiet === 'vegan') {
+        alternatives.push('tofu scramble', 'quinoa salad', 'lentil soup', 'chickpea curry');
+      }
+
+      // Usuń duplikaty i ogranicz do 6 sugestii
+      return [...new Set(alternatives)].slice(0, 6);
+    }
+
+    function renderNutritionInfo(label, confidence) {
+      const nutrition = findNutritionData(label);
+      
+      if (!nutrition) {
+        return `<div class="food-item">
+          <div class="food-header">
+            <span class="food-name">${label}</span>
+            <span class="confidence">${confidence}%</span>
+          </div>
+          <p>Brak szczegółowych danych żywieniowych dla tej potrawy.</p>
+        </div>`;
+      }
+
+      const glycemic = getGlycemicClass(nutrition.glycemicIndex || 50);
+      const healthScore = calculateHealthScore(nutrition);
+      const dietCompat = checkDietCompatibility(nutrition, label);
+      const alternatives = getAlternatives(label, nutrition);
+
+      return `
+        <div class="food-item">
+          <div class="food-header">
+            <span class="food-name">${label}</span>
+            <span class="confidence">${confidence}%</span>
+          </div>
+          
+          <!-- Ocena zdrowotna -->
+          <div style="text-align: center; margin: 15px 0;">
+            <div class="health-score ${healthScore.category}">
+              🏆 Ocena zdrowotna: ${healthScore.score}/10
+            </div>
+            <div style="font-size: 13px; color: #666; margin-top: 5px;">
+              ${healthScore.explanation}
+            </div>
+          </div>
+
+          <!-- Zgodność z dietą -->
+          <div class="diet-compatibility ${dietCompat.compatible ? 'diet-compatible' : 'diet-incompatible'}">
+            <strong>${dietCompat.icon} ${dietProfiles[selectedDiet].name}:</strong> ${dietCompat.message}
+          </div>
+          
+          <div class="macros">
+            <div class="macro macro-protein">
+              <strong>${nutrition.protein}g</strong><br>
+              <small>BIAŁKO</small>
+            </div>
+            <div class="macro macro-carbs">
+              <strong>${nutrition.carbs}g</strong><br>
+              <small>WĘGLOWODANY</small>
+            </div>
+            <div class="macro macro-fat">
+              <strong>${nutrition.fat}g</strong><br>
+              <small>TŁUSZCZE</small>
+            </div>
+          </div>
+
+          <div class="nutrition-grid">
+            <div class="nutrition-card">
+              <span class="nutrition-value">${nutrition.calories}</span>
+              <div class="nutrition-label">KALORIE</div>
+            </div>
+            <div class="nutrition-card">
+              <span class="nutrition-value">${nutrition.fiber || 0}g</span>
+              <div class="nutrition-label">BŁONNIK</div>
+            </div>
+            <div class="nutrition-card">
+              <span class="nutrition-value">${nutrition.sugar || 0}g</span>
+              <div class="nutrition-label">CUKIER</div>
+            </div>
+            <div class="nutrition-card">
+              <span class="nutrition-value">${nutrition.sodium || 0}mg</span>
+              <div class="nutrition-label">SÓD</div>
+            </div>
+            <div class="nutrition-card">
+              <span class="nutrition-value">${nutrition.calcium || 0}mg</span>
+              <div class="nutrition-label">WAPŃ</div>
+            </div>
+            <div class="nutrition-card">
+              <span class="nutrition-value">${nutrition.iron || 0}mg</span>
+              <div class="nutrition-label">ŻELAZO</div>
+            </div>
+            <div class="nutrition-card">
+              <span class="nutrition-value">${nutrition.vitaminC || 0}mg</span>
+              <div class="nutrition-label">WITAMINA C</div>
+            </div>
+            <div class="nutrition-card">
+              <span class="nutrition-value">${nutrition.potassium || 0}mg</span>
+              <div class="nutrition-label">POTAS</div>
+            </div>
+          </div>
+
+          <div style="margin-top: 15px;">
+            <span class="glycemic ${glycemic.class}">${glycemic.text}: ${nutrition.glycemicIndex || 'N/A'}</span>
+          </div>
+
+          <!-- Szczegóły oceny zdrowotnej -->
+          ${healthScore.factors && healthScore.factors.length > 0 ? `
+            <div style="margin: 15px 0; font-size: 12px; color: #666;">
+              <strong>Czynniki wpływające na ocenę:</strong><br>
+              ${healthScore.factors.join(' • ')}
+            </div>
+          ` : ''}
+
+          ${nutrition.allergens && nutrition.allergens.length > 0 ? `
+            <div style="margin-top: 10px;">
+              <strong>⚠️ Potencjalne alergeny:</strong>
+              <div class="allergens">
+                ${nutrition.allergens.map(allergen => 
+                  `<span class="allergen ${(nutrition.highRiskAllergens || []).includes(allergen) ? 'high-risk' : ''}">${allergen}</span>`
+                ).join('')}
+              </div>
+            </div>
+          ` : ''}
+
+          <!-- Alternatywy -->
+          ${alternatives.length > 0 ? `
+            <div class="alternatives">
+              <h4>💡 Zdrowsze alternatywy:</h4>
+              <div class="alternative-list">
+                ${alternatives.map(alt => `<span class="alternative-item">${alt}</span>`).join('')}
+              </div>
+            </div>
+          ` : ''}
+
+          <div class="progress">
+            <div class="progress-bar" style="width: ${confidence}%"></div>
+          </div>
+
+          <small style="color: #7f8c8d; margin-top: 10px; display: block;">
+            * Wartości podane na 100g produktu. Ocena bazuje na ogólnych wytycznych żywieniowych.
+          </small>
+        </div>
+      `;
+    }
+
+    async function classify(img) {
+      if (!session || !labels || !nutritionData) {
+        document.getElementById("results").innerHTML = '<div style="color: red;">❌ Model lub dane nie zostały jeszcze załadowane</div>';
+        return;
+      }
+
+      try {
+        document.getElementById("loading").style.display = "block";
+        
+        const input = preprocessImage(img);
+        const feeds = { [session.inputNames[0]]: input };
+        const output = await session.run(feeds);
+        const logits = output[session.outputNames[0]].data;
+        const probs = softmax(logits);
+
+        let top = [...probs]
+          .map((p,i)=>({prob:p, idx:i}))
+          .sort((a,b)=>b.prob-a.prob)
+          .slice(0,3);
+
+        let html = "";
+        top.forEach((t) => {
+          let label = labels[t.idx];
+          let confidence = (t.prob*100).toFixed(1);
+          html += renderNutritionInfo(label, confidence);
+        });
+
+        document.getElementById("results").innerHTML = html;
+      } catch (error) {
+        console.error("❌ Błąd klasyfikacji:", error);
+        document.getElementById("results").innerHTML = '<div style="color: red;">❌ Błąd podczas analizy zdjęcia</div>';
+      } finally {
+        document.getElementById("loading").style.display = "none";
+      }
+    }
+
+    function softmax(arr) {
+      const max = Math.max(...arr);
+      const exps = arr.map(x => Math.exp(x - max));
+      const sum = exps.reduce((a,b)=>a+b);
+      return exps.map(e=>e/sum);
+    }
+
+    const uploadArea = document.getElementById("upload-area");
+    const fileInput = document.getElementById("upload");
+    const preview = document.getElementById("preview");
+    const dietSelect = document.getElementById("diet-select");
+
+    // Event listener dla wyboru diety
+    dietSelect.addEventListener("change", (e) => {
+      selectedDiet = e.target.value;
+      // Jeśli są wyniki, przelicz je ponownie
+      if (document.getElementById("results").innerHTML.trim()) {
+        const img = document.getElementById("preview");
+        if (img.src) classify(img);
+      }
+    });
+
+    uploadArea.addEventListener("click", ()=> fileInput.click());
+    uploadArea.addEventListener("dragover", (e)=>{ 
+      e.preventDefault(); 
+      uploadArea.classList.add("dragover"); 
+    });
+    uploadArea.addEventListener("dragleave", ()=> uploadArea.classList.remove("dragover"));
+    uploadArea.addEventListener("drop", (e)=>{
+      e.preventDefault(); 
+      uploadArea.classList.remove("dragover");
+      handleFile(e.dataTransfer.files[0]);
+    });
+    fileInput.addEventListener("change", (e)=> handleFile(e.target.files[0]));
+
+    function handleFile(file) {
+      if (!file) return;
+      
+      if (!file.type.startsWith('image/')) {
+        alert('❌ Proszę wybrać plik obrazu');
+        return;
+      }
+      
+      if (file.size > 10 * 1024 * 1024) {
+        alert('❌ Plik jest zbyt duży (max 10MB)');
+        return;
+      }
+
+      preview.src = URL.createObjectURL(file);
+      preview.style.display = "block";
+      preview.onload = ()=> classify(preview);
+    }
+
+    // Inicjalizacja
+    loadModel();
+  </script>
+</body>
+</html>
